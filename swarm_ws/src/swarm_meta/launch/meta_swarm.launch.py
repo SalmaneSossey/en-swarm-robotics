@@ -1,11 +1,9 @@
 import os
 
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
 
 
 INITIAL_POSES = [
@@ -24,20 +22,31 @@ def launch_setup(context, *args, **kwargs):
     model_file = os.path.join(
         turtlebot3_gazebo, "models", "turtlebot3_burger", "model.sdf"
     )
+    world_file = os.path.join(turtlebot3_gazebo, "worlds", "empty_world.world")
     actions = [
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                os.path.join(turtlebot3_gazebo, "launch", "empty_world.launch.py")
-            )
-        )
+        ExecuteProcess(
+            cmd=[
+                "gzserver",
+                "-s",
+                "libgazebo_ros_init.so",
+                "-s",
+                "libgazebo_ros_factory.so",
+                world_file,
+            ],
+            output="screen",
+        ),
+        ExecuteProcess(
+            cmd=["gzclient"],
+            output="screen",
+        ),
     ]
     for index in range(n):
         x, y, yaw = INITIAL_POSES[index % len(INITIAL_POSES)]
         actions.append(
-            Node(
-                package="gazebo_ros",
-                executable="spawn_entity.py",
-                arguments=[
+            ExecuteProcess(
+                cmd=[
+                    "/usr/bin/python3",
+                    "/opt/ros/humble/lib/gazebo_ros/spawn_entity.py",
                     "-entity",
                     f"robot_{index}",
                     "-file",
