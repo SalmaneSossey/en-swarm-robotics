@@ -22,6 +22,13 @@ def signed_unit(vector: np.ndarray) -> np.ndarray:
     return np.sign(vector)
 
 
+def normalized(vector: np.ndarray) -> np.ndarray:
+    norm = float(np.linalg.norm(vector))
+    if norm < 1e-9:
+        return np.zeros_like(vector)
+    return vector / norm
+
+
 def yaw_from_quaternion(z: float, w: float) -> float:
     return math.atan2(2.0 * w * z, 1.0 - 2.0 * z * z)
 
@@ -41,9 +48,10 @@ class SwarmRobot(Node):
         self.declare_parameter("target_y", 0.0)
         self.declare_parameter("dt", 0.1)
         self.declare_parameter("u_max", 0.22)
-        self.declare_parameter("a_max", 0.18)
-        self.declare_parameter("dvc_alpha", 0.45)
-        self.declare_parameter("obstacle_gain", 0.8)
+        self.declare_parameter("a_max", 0.32)
+        self.declare_parameter("dvc_alpha", 0.80)
+        self.declare_parameter("goal_gain", 2.4)
+        self.declare_parameter("obstacle_gain", 0.45)
         self.declare_parameter("obstacle_gamma", 2.0)
         self.declare_parameter("adapted", True)
 
@@ -60,6 +68,7 @@ class SwarmRobot(Node):
         self.u_max_nominal = float(self.get_parameter("u_max").value)
         self.a_max = float(self.get_parameter("a_max").value)
         self.dvc_alpha = float(self.get_parameter("dvc_alpha").value)
+        self.goal_gain = float(self.get_parameter("goal_gain").value)
         self.obstacle_gain = float(self.get_parameter("obstacle_gain").value)
         self.obstacle_gamma = float(self.get_parameter("obstacle_gamma").value)
         self.adapted = bool(self.get_parameter("adapted").value)
@@ -140,38 +149,51 @@ class SwarmRobot(Node):
         return rotate_2d(repulsion_body, self.yaw)
 
     def control_step(self) -> None:
-        self.publish_fitness()
-        leaders = self.leaders()
+        try:
+            self.publish_fitness()
+            leaders = self.leaders()
 
-        safe_u = self.u_max_nominal
-        if math.isfinite(self.nearest_obstacle):
-            safe_u = max(0.03, min(self.u_max_nominal, self.dvc_alpha * self.nearest_obstacle))
-        c_hat = self.a_max * self.dt / math.sqrt(2.0)
-        omega = max(0.0, 1.0 - (self.a_max * self.dt / max(safe_u, 1e-3)))
+            safe_u = self.u_max_nominal
+            if math.isfinite(self.nearest_obstacle):
+                safe_u = max(0.05, min(self.u_max_nominal, self.dvc_alpha * self.nearest_obstacle))
+            c_hat = self.a_max * self.dt / math.sqrt(2.0)
+            omega = max(0.0, 1.0 - (self.a_max * self.dt / max(safe_u, 1e-3)))
 
-        acceleration = np.zeros(2, dtype=float)
-        for leader in leaders:
-            delta = leader - self.position
-            direction = signed_unit(delta) if self.adapted else delta
-            acceleration += (c_hat / 3.0) * random.random() * direction
+            acceleration = np.zeros(2, dtype=float)
+            for leader in leaders:
+                delta = leader - self.position
+                direction = signed_unit(delta) if self.adapted else normalized(delta)
+                acceleration += (c_hat / 3.0) * random.random() * direction
 
-        obstacle = self.obstacle_force_world()
-        if np.linalg.norm(obstacle) > 0.0:
-            acceleration += self.obstacle_gain * c_hat * random.random() * signed_unit(obstacle)
+            target_delta = self.target - self.position
+            target_direction = signed_unit(target_delta) if self.adapted else normalized(target_delta)
+            acceleration += self.goal_gain * c_hat * target_direction
 
-        self.velocity_ref = omega * self.velocity_ref + acceleration
-        speed = float(np.linalg.norm(self.velocity_ref))
-        if speed > safe_u:
-            self.velocity_ref *= safe_u / speed
+            obstacle = self.obstacle_force_world()
+            if np.linalg.norm(obstacle) > 0.0:
+                acceleration += self.obstacle_gain * c_hat * random.random() * signed_unit(obstacle)
 
-        body_velocity = rotate_2d(self.velocity_ref, -self.yaw)
-        desired_yaw = math.atan2(self.velocity_ref[1], self.velocity_ref[0]) if speed > 1e-4 else self.yaw
-        yaw_error = math.atan2(math.sin(desired_yaw - self.yaw), math.cos(desired_yaw - self.yaw))
+            self.velocity_ref = omega * self.velocity_ref + acceleration
+            speed = float(np.linalg.norm(self.velocity_ref))
+            if speed > safe_u:
+                self.velocity_ref *= safe_u / speed
+                speed = safe_u
 
-        cmd = Twist()
-        cmd.linear.x = float(np.clip(body_velocity[0], -safe_u, safe_u))
-        cmd.angular.z = float(np.clip(1.8 * yaw_error + 0.4 * body_velocity[1], -1.2, 1.2))
-        self.cmd_pub.publish(cmd)
+            desired_yaw = (
+                math.atan2(self.velocity_ref[1], self.velocity_ref[0]) if speed > 1e-4 else self.yaw
+            )
+            yaw_error = math.atan2(math.sin(desired_yaw - self.yaw), math.cos(desired_yaw - self.yaw))
+
+            cmd = Twist()
+            heading_factor = max(0.0, math.cos(yaw_error))
+            cmd.linear.x = float(np.clip(speed * heading_factor, 0.0, safe_u))
+            if speed > 1e-4 and cmd.linear.x < 0.04 and abs(yaw_error) < 1.4:
+                cmd.linear.x = min(0.04, safe_u)
+            cmd.angular.z = float(np.clip(2.2 * yaw_error, -1.3, 1.3))
+            self.cmd_pub.publish(cmd)
+        except Exception as exc:
+            self.get_logger().error(f"TP6 control step failed: {exc}")
+            self.cmd_pub.publish(Twist())
 
 
 def main() -> None:
