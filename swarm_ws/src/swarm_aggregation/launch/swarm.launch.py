@@ -14,10 +14,11 @@ def launch_setup(context, *args, **kwargs):
     random.seed(seed)
 
     turtlebot3_gazebo = get_package_share_directory("turtlebot3_gazebo")
+    swarm_aggregation = get_package_share_directory("swarm_aggregation")
     model_file = os.path.join(
         turtlebot3_gazebo, "models", "turtlebot3_burger", "model.sdf"
     )
-    world_file = os.path.join(turtlebot3_gazebo, "worlds", "empty_world.world")
+    world_file = os.path.join(swarm_aggregation, "worlds", "aggregation_arena.world")
     actions = [
         ExecuteProcess(
             cmd=[
