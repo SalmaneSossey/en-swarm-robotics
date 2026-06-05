@@ -19,10 +19,11 @@ INITIAL_POSES = [
 def launch_setup(context, *args, **kwargs):
     n = int(LaunchConfiguration("n").perform(context))
     turtlebot3_gazebo = get_package_share_directory("turtlebot3_gazebo")
+    swarm_meta = get_package_share_directory("swarm_meta")
     model_file = os.path.join(
         turtlebot3_gazebo, "models", "turtlebot3_burger", "model.sdf"
     )
-    world_file = os.path.join(turtlebot3_gazebo, "worlds", "empty_world.world")
+    world_file = os.path.join(swarm_meta, "worlds", "meta_arena.world")
     actions = [
         ExecuteProcess(
             cmd=[

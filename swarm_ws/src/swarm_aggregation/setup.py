@@ -24,6 +24,8 @@ setup(
             "aggregation_robot = swarm_aggregation.aggregation_robot:main",
             "supervisor = swarm_aggregation.supervisor:main",
             "plot_sigma2 = swarm_aggregation.plot_sigma2:main",
+            "analyze_sigma2 = swarm_aggregation.analyze_sigma2:main",
+            "plot_tconv = swarm_aggregation.plot_tconv:main",
         ],
     },
 )
