@@ -1,0 +1,18 @@
+# ROS 2 build outputs
+swarm_ws/build/
+swarm_ws/install/
+swarm_ws/log/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Experiment outputs
+*.csv
+*.png
+*.mp4
+
+# Local editor/environment files
+.vscode/
+.venv/
