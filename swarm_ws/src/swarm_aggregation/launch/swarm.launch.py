@@ -69,7 +69,7 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("n", default_value="10"),
-            DeclareLaunchArgument("arena", default_value="4.0"),
+            DeclareLaunchArgument("arena", default_value="1.5"),
             DeclareLaunchArgument("seed", default_value="7"),
             OpaqueFunction(function=launch_setup),
         ]
